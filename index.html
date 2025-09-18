@@ -39,10 +39,10 @@
   - Zoom: Mouse wheel
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.164.0/examples/js/controls/OrbitControls.js"></script>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/controls/OrbitControls.js';
 
-<script>
 let scene, camera, renderer, controls;
 let walls = [], furniture = [];
 let wallMode = false;
@@ -63,7 +63,7 @@ renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
 // Floor
@@ -84,8 +84,12 @@ scene.add(dirLight);
 const wallMaterial = new THREE.MeshStandardMaterial({color:0xffffff});
 
 // --- Functions ---
-function toggleWallMode(){ wallMode = !wallMode; wallStart = null; }
-function clearScene(){ walls.forEach(w=>scene.remove(w)); furniture.forEach(f=>scene.remove(f)); walls=[]; furniture=[]; }
+window.toggleWallMode = function() { wallMode = !wallMode; wallStart = null; }
+window.clearScene = function() {
+  walls.forEach(w=>scene.remove(w));
+  furniture.forEach(f=>scene.remove(f));
+  walls=[]; furniture=[];
+}
 
 // --- Wall drawing ---
 function createWall(start, end){
@@ -143,7 +147,10 @@ function onMouseDown(event){
   } else {
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(furniture);
-    if(intersects.length>0){ selectedFurniture = intersects[0].object; offset.copy(intersects[0].point).sub(selectedFurniture.position); }
+    if(intersects.length>0){ 
+      selectedFurniture = intersects[0].object; 
+      offset.copy(intersects[0].point).sub(selectedFurniture.position); 
+    }
   }
 }
 
