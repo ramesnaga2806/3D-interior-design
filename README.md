@@ -1,1 +1,173 @@
-# 3D-interior-design
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Interior Design Tool</title>
+<style>
+  body { margin:0; overflow:hidden; font-family: Arial, sans-serif; }
+  #sidebar {
+    position:absolute; top:10px; left:10px; width:200px; background:#f0f0f0; padding:10px; z-index:10; 
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.2); border-radius:8px;
+  }
+  #instructions {
+    position:absolute; bottom:10px; left:10px; width:250px; background:#ffffffcc; padding:10px;
+    font-size:13px; border-radius:8px; box-shadow: 1px 1px 5px rgba(0,0,0,0.2); z-index:10;
+  }
+  .item { margin:10px 0; cursor:pointer; text-align:center; }
+  button { margin-top:5px; width:100%; padding:5px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h3>Furniture</h3>
+  <div class="item" data-type="sofa">🛋 Sofa</div>
+  <div class="item" data-type="table">🪑 Table</div>
+  <div class="item" data-type="bed">🛏 Bed</div>
+  <button onclick="toggleWallMode()">Toggle Wall Drawing</button>
+  <button onclick="clearScene()">Clear Scene</button>
+</div>
+
+<div id="instructions">
+  <b>Instructions:</b><br>
+  - Click furniture to add<br>
+  - Toggle wall mode to draw walls (click two points)<br>
+  - Drag furniture to move<br>
+  - Rotate view: Left-click + drag<br>
+  - Pan view: Right-click + drag<br>
+  - Zoom: Mouse wheel
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.164.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+let scene, camera, renderer, controls;
+let walls = [], furniture = [];
+let wallMode = false;
+let wallStart = null;
+let raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+let selectedFurniture = null;
+let offset = new THREE.Vector3();
+
+// --- Scene setup ---
+scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf0f0f0);
+
+camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(10,10,10);
+
+renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// Floor
+const floorGeometry = new THREE.PlaneGeometry(20,20);
+const floorMaterial = new THREE.MeshStandardMaterial({color:0xdddddd});
+const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+floor.rotation.x = -Math.PI/2;
+scene.add(floor);
+
+// Lights
+const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(10,20,10);
+scene.add(dirLight);
+
+// Wall material
+const wallMaterial = new THREE.MeshStandardMaterial({color:0xffffff});
+
+// --- Functions ---
+function toggleWallMode(){ wallMode = !wallMode; wallStart = null; }
+function clearScene(){ walls.forEach(w=>scene.remove(w)); furniture.forEach(f=>scene.remove(f)); walls=[]; furniture=[]; }
+
+// --- Wall drawing ---
+function createWall(start, end){
+  const length = start.distanceTo(end);
+  const wallGeom = new THREE.BoxGeometry(length,3,0.2);
+  const wall = new THREE.Mesh(wallGeom, wallMaterial);
+  wall.position.set((start.x+end.x)/2, 1.5, (start.z+end.z)/2);
+  const angle = Math.atan2(end.z - start.z, end.x - start.x);
+  wall.rotation.y = -angle;
+  scene.add(wall);
+  walls.push(wall);
+}
+
+// --- Simple furniture creation ---
+function createFurniture(type){
+  let geom, material;
+  material = new THREE.MeshStandardMaterial({color:0x8B4513});
+  switch(type){
+    case 'sofa': geom = new THREE.BoxGeometry(2,1,1); break;
+    case 'table': geom = new THREE.CylinderGeometry(0.5,0.5,1,16); break;
+    case 'bed': geom = new THREE.BoxGeometry(2,0.5,1.5); break;
+    default: geom = new THREE.BoxGeometry(1,1,1);
+  }
+  const obj = new THREE.Mesh(geom, material);
+  obj.position.set(0, geom.parameters.height/2 || 0.5,0);
+  scene.add(obj);
+  furniture.push(obj);
+}
+
+// Furniture buttons
+document.querySelectorAll('.item').forEach(it=>{
+  it.addEventListener('click', ()=>createFurniture(it.dataset.type));
+});
+
+// --- Mouse interaction ---
+renderer.domElement.addEventListener('mousedown', onMouseDown, false);
+renderer.domElement.addEventListener('mousemove', onMouseMove, false);
+renderer.domElement.addEventListener('mouseup', ()=>{ selectedFurniture=null; }, false);
+
+function getMouseIntersection(event){
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left)/rect.width)*2 -1;
+  mouse.y = -((event.clientY - rect.top)/rect.height)*2 +1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObject(floor);
+  return intersects.length>0 ? intersects[0].point : null;
+}
+
+function onMouseDown(event){
+  const point = getMouseIntersection(event);
+  if(!point) return;
+  if(wallMode){
+    if(!wallStart){ wallStart = point; } 
+    else { createWall(wallStart, point); wallStart=null; }
+  } else {
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(furniture);
+    if(intersects.length>0){ selectedFurniture = intersects[0].object; offset.copy(intersects[0].point).sub(selectedFurniture.position); }
+  }
+}
+
+function onMouseMove(event){
+  if(selectedFurniture){
+    const point = getMouseIntersection(event);
+    if(point) selectedFurniture.position.copy(point).sub(offset);
+  }
+}
+
+// --- Animate ---
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// --- Resize ---
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
